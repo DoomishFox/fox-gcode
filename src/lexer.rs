@@ -4,7 +4,7 @@ pub fn lex(command_str: &str) -> Result<Option<Vec::<Field>>, LexError> {
     }
 
     let mut scanner = Scanner::new(command_str);
-    let mut c_arr = Vec::<Field>::new();
+    let mut fields = Vec::<Field>::new();
 
     loop {
         match scanner.peek() {
@@ -26,9 +26,9 @@ pub fn lex(command_str: &str) -> Result<Option<Vec::<Field>>, LexError> {
                     }
                 }
             },
-            // quoted strings
+            // quoted strings (needs to get moved into field parsing)
             //Some('"') => {},
-            // expressions
+            // expressions (needs to get moved into field parsing)
             //Some('{') => {},
             // end of command (semicolon comments are always at EOL)
             Some(';')
@@ -37,7 +37,7 @@ pub fn lex(command_str: &str) -> Result<Option<Vec::<Field>>, LexError> {
             | Some('*')
             // additionally, if there is no character return we also want to
             // end the command parsing
-            | None => return Ok(Some(c_arr)),
+            | None => return Ok(Some(fields)),
             // now that we've covered our bases, we can skip all remaining
             // spaces. nothing else cares about them
             Some(' ') => _ = scanner.pop(),
@@ -49,8 +49,8 @@ pub fn lex(command_str: &str) -> Result<Option<Vec::<Field>>, LexError> {
             Some(_) => {
                 match field(&mut scanner) {
                     // valid next field
-                    Ok(Some(next_field)) => c_arr.push(next_field),
-                    // no next field at this location
+                    Ok(Some(next_field)) => fields.push(next_field),
+                    // no parsable field at this location
                     Ok(None) => _ = scanner.pop(),
                     // parse error
                     Err(e) => return Err(e),
@@ -66,8 +66,6 @@ fn field(scanner: &mut Scanner) -> Result<Option<Field>, LexError> {
         Some('M') => {
             scanner.pop();
             match scanner.scan_numeric() {
-                // (see Field below for what this horseshit is)
-                //Some(val) => Ok(Some(Field::M(Some(FieldValue::Numeric(val))))),
                 Some(val) => Ok(Some(Field::M(val as u32))),
                 _ => Err(LexError::NonNumericNextToken)
             }
@@ -75,7 +73,6 @@ fn field(scanner: &mut Scanner) -> Result<Option<Field>, LexError> {
         Some('G') => {
             scanner.pop();
             match scanner.scan_numeric() {
-                //Some(val) => Ok(Some(Field::G(Some(FieldValue::Numeric(val))))),
                 Some(val) => Ok(Some(Field::G(val as u32))),
                 _ => Err(LexError::NonNumericNextToken)
             }
@@ -83,22 +80,23 @@ fn field(scanner: &mut Scanner) -> Result<Option<Field>, LexError> {
         Some('X') => {
             scanner.pop();
             match scanner.scan_numeric() {
+                // (see Field below for what this horseshit is)
                 Some(val) => Ok(Some(Field::X(Some(FieldValue::Numeric(val))))),
-                _ => Err(LexError::NonNumericNextToken)
+                None => Ok(Some(Field::X(None))),
             }
         },
         Some('Y') => {
             scanner.pop();
             match scanner.scan_numeric() {
                 Some(val) => Ok(Some(Field::Y(Some(FieldValue::Numeric(val))))),
-                _ => Err(LexError::NonNumericNextToken)
+                None => Ok(Some(Field::Y(None))),
             }
         },
         Some('Z') => {
             scanner.pop();
             match scanner.scan_numeric() {
                 Some(val) => Ok(Some(Field::Z(Some(FieldValue::Numeric(val))))),
-                _ => Err(LexError::NonNumericNextToken)
+                None => Ok(Some(Field::Z(None))),
             }
         }
         _ => Ok(None)
@@ -149,7 +147,7 @@ impl Scanner {
                     Some(character) => {
                         // if the current character is part of a numeric,
                         // ingest it and move the cursor forward
-                        if character == &'.' || character.is_numeric() {
+                        if character.is_numeric() || character == &'.'{
                             sequence.push(*character);
                             self.cursor += 1;
                         } else {
@@ -172,13 +170,6 @@ pub enum LexError {
     Generic,
     NonNumericNextToken
 }
-
-/*
-pub struct Field {
-    arg_t: FieldType,
-    arg_v: Option<FieldValue>
-}
-*/
 
 #[allow(dead_code)]
 #[derive(Debug)]
